@@ -47,6 +47,7 @@ struct fwnode_handle {
 	struct list_head suppliers;
 	struct list_head consumers;
 	unsigned long flags;
+	ANDROID_KABI_RESERVE(1);
 };
 
 /*
