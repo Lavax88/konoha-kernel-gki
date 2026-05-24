@@ -485,7 +485,7 @@ fix_execveat_handlers() {
 
     # Guard old ksu_handle_execve_sucompat with #ifndef CONFIG_KSU_SUSFS
     # (it uses ksu_syscall_table from syscall_hook_manager.c which is not compiled)
-    if [ "$MANAGER" != "ksu-next" ] && [ "$MANAGER" != "mambosu" ] && grep -q "ksu_handle_execve_sucompat" "$SUCOMPAT_C" 2>/dev/null && \
+    if [ "$MANAGER" != "ksu-next" ] && [ "$MANAGER" != "mambosu" ] && [ "$MANAGER" != "sukisu" ] && grep -q "ksu_handle_execve_sucompat" "$SUCOMPAT_C" 2>/dev/null && \
        grep -q "ksu_syscall_table" "$SUCOMPAT_C" 2>/dev/null && \
        ! grep -q '#ifndef CONFIG_KSU_SUSFS' "$SUCOMPAT_C" 2>/dev/null; then
 
@@ -509,6 +509,38 @@ fix_execveat_handlers() {
     # Add ksu_handle_execveat_sucompat + ksu_handle_execveat if missing
     if ! grep -q "ksu_handle_execveat_sucompat" "$SUCOMPAT_C" 2>/dev/null; then
         cat >> "$SUCOMPAT_C" << 'EXECVEAT_SUCOMPAT_EOF'
+
+
+    # Inject ksu_handle_stat_user for kernel 6.1+ if missing (required by tracepoint hook)
+    if ! grep -q "ksu_handle_stat_user" "$SUCOMPAT_C" 2>/dev/null; then
+        cat >> "$SUCOMPAT_C" << 'STAT_USER_EOF'
+
+int ksu_handle_stat_user(int *dfd, const char __user **filename_user, int *flags)
+{
+    if (unlikely(!filename_user))
+        return 0;
+    char path[sizeof(su_path) + 1] = {0};
+    strncpy_from_user(path, *filename_user, sizeof(path));
+    if (unlikely(!memcmp(path, su_path, sizeof(su_path)))) {
+        pr_info("ksu_handle_stat_user: su->sh!\n");
+        *filename_user = sh_user_path();
+    }
+    return 0;
+}
+STAT_USER_EOF
+        echo "[SUSFS-Fixup] sucompat.c: Injected ksu_handle_stat_user"
+    if ! grep -q "long ksu_handle_execve_sucompat" "$SUCOMPAT_C" 2>/dev/null; then
+        cat >> "$SUCOMPAT_C" << 'SUCOMPAT_EOF'
+
+long ksu_handle_execve_sucompat(const char __user **filename_user, int orig_nr, const struct pt_regs *regs)
+{
+    long (*sys_func)(const struct pt_regs *) = ksu_syscall_table[orig_nr];
+    return sys_func(regs);
+}
+SUCOMPAT_EOF
+        echo "[SUSFS-Fixup] sucompat.c: Injected ksu_handle_execve_sucompat stub"
+    fi
+    }
 
 #ifdef CONFIG_KSU_SUSFS
 static const char _su_path[] = "/system/bin/su";
@@ -561,10 +593,38 @@ int ksu_handle_execveat(int *fd, struct filename **filename_ptr, void *argv,
 EXECVEAT_SUCOMPAT_EOF
         echo "[SUSFS-Fixup] sucompat.c: Added ksu_handle_execveat_sucompat + ksu_handle_execveat"
     fi
-}
 
-# --------------------------------------------------------------------------
-# KernelSU-Next: Restore hook objects removed by patch, fix bridge
+    # Inject ksu_handle_stat_user for kernel 6.1+ if missing (required by tracepoint hook)
+    if ! grep -q "ksu_handle_stat_user" "$SUCOMPAT_C" 2>/dev/null; then
+        cat >> "$SUCOMPAT_C" << 'STAT_USER_EOF'
+
+int ksu_handle_stat_user(int *dfd, const char __user **filename_user, int *flags)
+{
+    if (unlikely(!filename_user))
+        return 0;
+    char path[sizeof(su_path) + 1] = {0};
+    strncpy_from_user(path, *filename_user, sizeof(path));
+    if (unlikely(!memcmp(path, su_path, sizeof(su_path)))) {
+        pr_info("ksu_handle_stat_user: su->sh!\n");
+        *filename_user = sh_user_path();
+    }
+    return 0;
+}
+STAT_USER_EOF
+        echo "[SUSFS-Fixup] sucompat.c: Injected ksu_handle_stat_user"
+    if ! grep -q "long ksu_handle_execve_sucompat" "$SUCOMPAT_C" 2>/dev/null; then
+        cat >> "$SUCOMPAT_C" << 'SUCOMPAT_EOF'
+
+long ksu_handle_execve_sucompat(const char __user **filename_user, int orig_nr, const struct pt_regs *regs)
+{
+    long (*sys_func)(const struct pt_regs *) = ksu_syscall_table[orig_nr];
+    return sys_func(regs);
+}
+SUCOMPAT_EOF
+        echo "[SUSFS-Fixup] sucompat.c: Injected ksu_handle_execve_sucompat stub"
+    fi
+    fi
+}
 # --------------------------------------------------------------------------
 fix_ksu_next_kbuild() {
     if [ ! -f "$KBUILD" ]; then return; fi
@@ -641,6 +701,13 @@ fix_ksu_next_bridge() {
         if ! grep -q "hook/tp_marker.h" "$SETUID_HOOK_C" 2>/dev/null; then
             sed -i '/#include "hook\/setuid_hook.h"/a #include "hook/tp_marker.h"' "$SETUID_HOOK_C"
         fi
+    fi
+
+    # Fix ksu_su_compat_enabled static key usage
+    if grep -q "if (!ksu_su_compat_enabled)" "$BRIDGE_C" 2>/dev/null; then
+        sed -i 's/if (!ksu_su_compat_enabled)/if (!static_branch_likely(\&ksu_su_compat_enabled))/g' "$BRIDGE_C"
+        sed -i 's/else if (ksu_su_compat_enabled)/else if (static_branch_likely(\&ksu_su_compat_enabled))/g' "$BRIDGE_C"
+        echo "[SUSFS-Fixup] syscall_event_bridge.c: Fixed ksu_su_compat_enabled static key access"
     fi
 }
 
@@ -900,16 +967,10 @@ fi
 # Dispatch per manager
 # ==========================================================================
 case "$MANAGER" in
-    sukisu)
+    sukisu|mambosu)
         fix_sulog_type_mismatch
         fix_execveat_handlers
-        fix_kprobe_supercall
-        fix_ksu_late_loaded
-        ;;
-    mambosu)
-        fix_sulog_type_mismatch
-        fix_execveat_handlers
-        # MamboSU uses KernelSU-Next hooking architecture
+        # Both use KernelSU-Next hooking architecture
         fix_ksu_next_kbuild
         fix_ksu_next_bridge
         fix_ksu_next_ksud
@@ -920,8 +981,6 @@ case "$MANAGER" in
             fix_ksu_next_supercall
         fi
         # Fix adb_root call signature mismatch in syscall_event_bridge.c
-        # SUSFS patch changed adb_root from (struct pt_regs *) to
-        # (const char *filename, void ***envp_user_ptr) but bridge still uses old call
         if [ -f "$BRIDGE_C" ] && grep -q 'ksu_adb_root_handle_execve((struct pt_regs \*)regs)' "$BRIDGE_C" 2>/dev/null; then
             sed -i 's|ksu_adb_root_handle_execve((struct pt_regs \*)regs)|ksu_adb_root_handle_execve((const char *)PT_REGS_PARM1(regs), (void __user ***)\&PT_REGS_PARM3(regs))|' "$BRIDGE_C"
             echo "[SUSFS-Fixup] syscall_event_bridge.c: Fixed adb_root call signature"
