@@ -32,6 +32,7 @@ detect_manager() {
 
     if [ -n "$hint" ]; then
         case "$hint" in
+            ksu)       echo "ksu" ;;
             ksu-next)  echo "ksu-next" ;;
             sukisu)    echo "sukisu" ;;
             resukisu)  echo "resukisu" ;;
@@ -983,6 +984,44 @@ SULOG_EXECVE_EOF
         fix_ksu_next_ksud
         fix_execveat_handlers
         fix_ksu_next_susfs_umount
+        # Fix adb_root call signature mismatch in syscall_event_bridge.c
+        if [ -f "$BRIDGE_C" ] && grep -q 'ksu_adb_root_handle_execve((struct pt_regs \*)regs)' "$BRIDGE_C" 2>/dev/null; then
+            sed -i 's|ksu_adb_root_handle_execve((struct pt_regs \*)regs)|ksu_adb_root_handle_execve((const char *)PT_REGS_PARM1(regs), (void __user ***)\&PT_REGS_PARM3(regs))|' "$BRIDGE_C"
+            echo "[SUSFS-Fixup] syscall_event_bridge.c: Fixed adb_root call signature"
+        fi
+        ;;
+    ksu)
+        echo "[SUSFS-Fixup] Applying fixes for standard KernelSU ($MANAGER)..."
+        fix_sulog_type_mismatch
+        
+        # Standard KSU doesn't use Next's bridge renames, but we still need adb_root fix
+        if [ -f "$BRIDGE_C" ] && grep -q 'ksu_adb_root_handle_execve((struct pt_regs \*)regs)' "$BRIDGE_C" 2>/dev/null; then
+            sed -i 's|ksu_adb_root_handle_execve((struct pt_regs \*)regs)|ksu_adb_root_handle_execve((const char *)PT_REGS_PARM1(regs), (void __user ***)\&PT_REGS_PARM3(regs))|' "$BRIDGE_C"
+            echo "[SUSFS-Fixup] syscall_event_bridge.c: Fixed adb_root call signature"
+        fi
+        
+        # Standard KSU removed ksu_sulog_capture_root_execve, we need to restore it
+        if [ -f "$SULOG_EVENT_C" ] && ! grep -q "ksu_sulog_capture_root_execve" "$SULOG_EVENT_C" 2>/dev/null; then
+            cat >> "$SULOG_EVENT_C" << 'SULOG_EXECVE_EOF'
+
+struct ksu_sulog_pending_event *ksu_sulog_capture_root_execve(const char __user *filename_user,
+                                                              const char __user *const __user *argv_user, gfp_t gfp)
+{
+    struct user_arg_ptr _argv_wrap = { .ptr.native = argv_user };
+    return ksu_sulog_capture(KSU_SULOG_EVENT_ROOT_EXECVE, filename_user, &_argv_wrap, gfp);
+}
+SULOG_EXECVE_EOF
+            echo "[SUSFS-Fixup] sulog/event.c: Restored ksu_sulog_capture_root_execve"
+        fi
+        if [ -f "$SULOG_EVENT_H" ] && ! grep -q "ksu_sulog_capture_root_execve" "$SULOG_EVENT_H" 2>/dev/null; then
+            sed -i '/ksu_sulog_capture_sucompat/i struct ksu_sulog_pending_event *ksu_sulog_capture_root_execve(const char __user *filename_user, const char __user *const __user *argv_user, gfp_t gfp);' "$SULOG_EVENT_H"
+        fi
+        
+        # Standard KSU handles sucompat in execveat now, so we bypass the old hook
+        if [ -f "$BRIDGE_C" ]; then
+            sed -i 's|ret = ksu_handle_execve_sucompat(filename_user, orig_nr, regs);|ret = 0; // bypassed|g' "$BRIDGE_C"
+            echo "[SUSFS-Fixup] syscall_event_bridge.c: Bypassed deprecated ksu_handle_execve_sucompat"
+        fi
         ;;
     *)
         echo "[SUSFS-Fixup] Unknown manager '$MANAGER' — applying best-effort fixes"
@@ -995,6 +1034,11 @@ SULOG_EXECVE_EOF
             fix_ksu_next_bridge
             fix_ksu_next_supercall
             fix_ksu_next_ksud
+        fi
+        # Fix adb_root call signature mismatch in syscall_event_bridge.c (for latest official ksu)
+        if [ -f "$BRIDGE_C" ] && grep -q 'ksu_adb_root_handle_execve((struct pt_regs \*)regs)' "$BRIDGE_C" 2>/dev/null; then
+            sed -i 's|ksu_adb_root_handle_execve((struct pt_regs \*)regs)|ksu_adb_root_handle_execve((const char *)PT_REGS_PARM1(regs), (void __user ***)\&PT_REGS_PARM3(regs))|' "$BRIDGE_C"
+            echo "[SUSFS-Fixup] syscall_event_bridge.c: Fixed adb_root call signature"
         fi
         ;;
 esac
