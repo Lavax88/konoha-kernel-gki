@@ -1150,14 +1150,8 @@ def fix_rules_c(filepath):
     with open(filepath, 'r') as f:
         content = f.read()
 
-    pattern = r'(static void reset_avc_cache\([^)]*\)\s*\{)(.*?)(#if\s*\([^#]*?)(?=avc_ss_reset|struct selinux_avc)'
-    def repl(m):
-        return m.group(1) + \"\n    u32 seqno = 1;\n    struct page *spage = selinux_kernel_status_page();\n    if (spage) {\n        struct selinux_kernel_status *status = page_address(spage);\n        seqno = status->policyload;\n    }\n    if (seqno == 0) seqno = 1;\n\" + m.group(3)
-
-    content = re.sub(pattern, repl, content, flags=re.DOTALL)
-    content = re.sub(r'(avc_ss_reset\([^)]*?)0(\))', r'\g<1>seqno\g<2>', content)
-    content = re.sub(r'(selnl_notify_policyload\([^)]*?)0(\))', r'\g<1>seqno\g<2>', content)
-    content = re.sub(r'(selinux_status_update_policyload\([^)]*?)0(\))', r'\g<1>seqno\g<2>', content)
+    # Comment out selinux_status_update_policyload to prevent sequence increment and status page allocation
+    content = re.sub(r'(selinux_status_update_policyload\([^)]*\);)', r'// \g<1>', content)
 
     with open(filepath, 'w') as f:
         f.write(content)
