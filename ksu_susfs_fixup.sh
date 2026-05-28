@@ -737,6 +737,22 @@ SUPERCALL_NEXT_EOF
 fix_ksu_next_ksud() {
     if [ ! -f "$KSUD_INT_C" ]; then return; fi
 
+    # Fix compilation errors in upstream ksud_integration.c
+    if ! grep -q "static void stop_init_rc_hook(void);" "$KSUD_INT_C" 2>/dev/null; then
+        sed -i '/DEFINE_STATIC_KEY_TRUE(ksu_is_input_hook_enabled);/a \
+\
+static void stop_init_rc_hook(void);\
+static struct work_struct stop_input_hook_work;' "$KSUD_INT_C"
+        echo "[SUSFS-Fixup] ksud_integration.c: Added missing declarations"
+    fi
+
+    if grep -q "ksu_handle_execveat_ksud(path, &argv);" "$KSUD_INT_C" 2>/dev/null; then
+        sed -i 's/char path\[32\];/char path\[256\];\n    struct filename dummy_filename;\n    struct filename \*dummy_filename_ptr = \&dummy_filename;\n    int fd = AT_FDCWD;\n    int flags = 0;/' "$KSUD_INT_C"
+        sed -i 's/strncpy_from_user(path, fn, 32);/strncpy_from_user(path, fn, sizeof(path));/' "$KSUD_INT_C"
+        sed -i 's/ksu_handle_execveat_ksud(path, &argv);/dummy_filename.name = path;\n    ksu_handle_execveat_ksud(\&fd, \&dummy_filename_ptr, \&argv, NULL, \&flags);/' "$KSUD_INT_C"
+        echo "[SUSFS-Fixup] ksud_integration.c: Fixed ksu_handle_execveat_ksud argument mismatch"
+    fi
+
     # Fix extern → include for ksu_handle_execveat_init
     if grep -q "extern int ksu_handle_execveat_init" "$KSUD_INT_C" 2>/dev/null; then
         if ! grep -q "feature/sucompat.h" "$KSUD_INT_C" 2>/dev/null; then
