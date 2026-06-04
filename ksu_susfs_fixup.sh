@@ -1166,7 +1166,7 @@ import re
 with open('$RULES_C', 'r') as f:
     content = f.read()
 
-pattern = r'(backup_sepolicy =\s+ksu_dup_sepolicy\(rcu_dereference_protected\(old_pol, lockdep_is_held\(&selinux_state\.policy_mutex\)\)\);.*?pr_info\(\"backup sepolicy success!\\\\n\"\);.*?\}\s*\n\s*\})'
+pattern = r'(backup_sepolicy =\s+ksu_dup_sepolicy\(rcu_dereference_protected\(old_pol, lockdep_is_held\(&selinux_state\.policy_mutex\)\)\);.*?(?:pr_info\(\"backup sepolicy success!\\\\n\"\);|pr_info\(\"backup sepolicy success! latest_granting=%d\\\\n\", backup_sepolicy->latest_granting\);).*?\}\s*\n\s*\})'
 
 def repl(m):
     block = m.group(1)
