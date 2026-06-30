@@ -75,6 +75,36 @@ jobs:
           cd gki-clo
           [ ! -d "anykernel" ] && git clone https://github.com/osm0sis/AnyKernel3.git anykernel || true
 
+      - name: Setup NoMount
+        run: |
+          # Safe check for stock builds using your workflow's matrix keys
+          CURRENT_ROOT="${{ matrix.root }}"
+          CURRENT_VARIANT="${{ matrix.variant }}"
+          
+          if [ "$CURRENT_ROOT" = "stock" ] || [ "$CURRENT_ROOT" = "none" ] || [ "$CURRENT_VARIANT" = "stock" ]; then
+            echo "Stock build detected. Skipping NoMount setup."
+            exit 0
+          fi
+          
+          echo "Fetching NoMount from maxsteeel repository..."
+          git clone --depth=1 https://github.com/maxsteeel/nomount.git /tmp/nomount
+          cd gki-clo
+          
+          KERNEL_VERSION=$(grep -E '^(VERSION|PATCHLEVEL)\s*=' Makefile | awk -F'=' '{print $2}' | tr -d ' ' | paste -sd '.' -)
+          echo "Detected kernel version: $KERNEL_VERSION"
+          
+          PATCH_FILE=$(find /tmp/nomount -type f -name "nomount_${KERNEL_VERSION}*.patch" | head -n 1)
+          
+          if [ -f "$PATCH_FILE" ]; then
+            echo "Applying NoMount patch: $PATCH_FILE"
+            patch -p1 < "$PATCH_FILE"
+            
+            cp -r /tmp/nomount/kernel/src/* fs/
+          else
+            echo "Warning: NoMount patch for $KERNEL_VERSION not found in the repository!"
+            exit 1
+          fi
+
       - name: Build Kernel
         run: |
           cd gki-clo
