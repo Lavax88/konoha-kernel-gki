@@ -271,15 +271,6 @@ jobs:
             KPM_KEY="$KPM_SUPERKEY_SECRET"
           fi
 
-          if [ -d "Kono-Ha-Release" ]; then
-            cd Kono-Ha-Release
-            for f in Kono-Ha-*; do
-              if [ -f "$f" ]; then
-                mv "$f" "${f/Kono-Ha-/${{ env.CLEAN_KERNEL_NAME }}-}"
-              fi
-            done
-          fi
-
           ./build.sh \
             hz="$HZ_ID" \
             variant="$INPUT_VARIANT" \
