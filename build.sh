@@ -310,7 +310,7 @@ else
 #include <asm\/current.h>' "$SUSFS_DEF_H"
         fi
 
-        if grep -q "config KSU_SUSFS" "$MODULES_DIR/$REPO_NAME/kernel/Kconfig" 2>/dev/null; then
+        if [ "$ROOT" = "resukisu" ] || grep -q "config KSU_SUSFS" "$MODULES_DIR/$REPO_NAME/kernel/Kconfig" 2>/dev/null; then
             echo "[+] $REPO_NAME already has native SUSFS integration. Skipping patch..."
         else
             echo "[+] Patching $REPO_NAME for SUSFS..."
