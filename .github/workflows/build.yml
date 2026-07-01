@@ -112,15 +112,6 @@ jobs:
             kernel_name=-Kono-Ha-Bomb- \
             lto=full
            
-          if [ -d "Kono-Ha-Release" ]; then
-            cd Kono-Ha-Release
-            for f in Kono-Ha-*; do
-              if [ -f "$f" ]; then
-                mv "$f" "${f/Kono-Ha-/Kono-Ha-Bomb-}"
-              fi
-            done
-          fi
-            
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
