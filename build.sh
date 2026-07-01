@@ -801,7 +801,7 @@ fi
 HZ_LABEL=""
 case "$HZ" in 100) HZ_LABEL="-powersave" ;; 500) HZ_LABEL="-performance" ;; 1000) HZ_LABEL="-ultra-performance" ;; *) HZ_LABEL="-balance" ;; esac
 
-ZIP_NAME="Kono-Ha-${VERSION}${ZIP_SUFFIX}${HZ_LABEL}-$TIME.zip"
+ZIP_NAME="Kono-Ha-Bomb-${VERSION}${ZIP_SUFFIX}${HZ_LABEL}-$TIME.zip"
 cd "$TEMP_DIR" && zip -r9 "../$ZIP_NAME" * -x .git README.md *placeholder > /dev/null && cd ..
 rm -rf "$TEMP_DIR"
 
