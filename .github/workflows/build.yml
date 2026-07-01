@@ -12,7 +12,7 @@ env:
 
 jobs:
   build-kernel-standard:
-    name: "${{ format('Kono-Ha-Bomb-{0}-standard-bypasscharging', matrix.variant == 'stock' && format('{0}-{1}', matrix.variant, matrix.hz.name) || format('{0}-{1}-{2}', matrix.variant, matrix.root, matrix.hz.name)) }}"
+    name: "${{ format('Kono-Ha-Bomb-{0}-standard', matrix.variant == 'stock' && format('{0}-{1}', matrix.variant, matrix.hz.name) || format('{0}-{1}-{2}', matrix.variant, matrix.root, matrix.hz.name)) }}"
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -111,13 +111,23 @@ jobs:
             droidspaces=off \
             kernel_name=-Kono-Ha-Bomb- \
             lto=full
-
+           
+          if [ -d "Kono-Ha-Release" ]; then
+            cd Kono-Ha-Release
+            for f in Kono-Ha-*; do
+              if [ -f "$f" ]; then
+                mv "$f" "${f/Kono-Ha-/Kono-Ha-Bomb-}"
+              fi
+            done
+          fi
+            
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: "${{ format('Kono-Ha-Bomb-{0}-bypasscharging', matrix.variant == 'stock' && format('{0}-{1}', matrix.variant, matrix.hz.name) || format('{0}-{1}-{2}', matrix.variant, matrix.root, matrix.hz.name)) }}"
+          name: "${{ format('Kono-Ha-Bomb-{0}', matrix.variant == 'stock' && format('{0}-{1}', matrix.variant, matrix.hz.name) || format('{0}-{1}-{2}', matrix.variant, matrix.root, matrix.hz.name)) }}"
           path: gki-clo/Kono-Ha-Release
           retention-days: 7
+      
 
   # NOTE: Some Root manager builds  removed from automated CI to reduce job count.
   # Droidspaces and Hardened versions also removed!
@@ -212,8 +222,8 @@ jobs:
               f.write('Automated kernel build (Bypass Charging Default).\n')
               f.write(f'Commit: {sha}\n\n')
               f.write('> [!CAUTION]\n> **BACKUP your boot.img** before flashing to recover from potential bootloops or other issues.\n\n')
-              f.write(gen_table('Standard Builds ⚡', std, True, False))
-              f.write(gen_table('SUSFS ඞ ⚡', susfs, True, False))
+              f.write(gen_table('Standard Builds ⚡', std, False, False))
+              f.write(gen_table('SUSFS ඞ ⚡', susfs, False, False))
           "
 
       - name: Create Release
