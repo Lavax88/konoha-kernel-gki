@@ -176,18 +176,6 @@ jobs:
                   if hz == 'powersave' and '-powersave-' not in fl: continue
                   if hz == 'balance' and '-balance-' not in fl: continue
                   
-                  if kpm and '-kpm' not in fl: continue
-                  if not kpm and '-kpm' in fl: continue
-                  
-                  if hardened and '-hardened' not in fl: continue
-                  if not hardened and '-hardened' in fl: continue
-                  
-                  if bypass and '-bypasscharging' not in fl: continue
-                  if not bypass and '-bypasscharging' in fl: continue
-                  
-                  if droidspaces and '-droidspaces' not in fl: continue
-                  if not droidspaces and '-droidspaces' in fl: continue
-                  
                   label = '-'.join(filter(None, [variant, root if root != 'none' else '', hz, 'kpm' if kpm else '', 'hardened' if hardened else '', 'bypass' if bypass else '', 'droidspaces' if droidspaces else '']))
                   return f'[{label}]({base_url}/{f})'
               return '❌ Failed'
